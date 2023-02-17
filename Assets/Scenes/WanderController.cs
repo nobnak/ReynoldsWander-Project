@@ -62,7 +62,6 @@ public class WanderController : MonoBehaviour {
             float2 force_total = default;
 
             if (fields.IsOutsideQuad(pos_world, out var dist, out var field_dir)) {
-                Debug.Log($"Outside: dir={field_dir}");
                 force_total += field_dir * tuner.boundary_power;
             } else {
                 var wander_force = GetWanderForce(ch);
@@ -95,7 +94,16 @@ public class WanderController : MonoBehaviour {
 
             foreach (var ch in chars) {
                 float3 center = ch.tr.position;
-                using (gl.GetScope(prop)) {
+                using (new GLModelViewScope(ch.tr.localToWorldMatrix))
+                using (gl.GetScope(new GLProperty(prop) { Color = Color.magenta })) {
+                    var wander_center = TR_X * tuner.wander_distance;
+                    GL.Begin(GL.LINE_STRIP);
+                    GL.Vertex(Vector3.zero);
+                    GL.Vertex(wander_center);
+                    GL.Vertex(wander_center + new float3(ch.wanderTarget, 0f));
+                    GL.End();
+                }
+                using (gl.GetScope(new GLProperty(prop) { Color = Color.red })) {
                     GL.Begin(GL.LINES);
                     GL.Vertex(center);
                     GL.Vertex(center + new float3(ch.totalForce, 0f));
