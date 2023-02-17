@@ -66,7 +66,7 @@ public static class QuadExtension {
             );
 
         var closest_world2 = math.mul(model, new float4(closest_pos, 0f, 1f)).xy;
-        field_dir = closest_world2 - pos_local;
+        field_dir = closest_world2 - pos_world2;
         field_dir = math.mul(model, new float4(field_dir, 0f, 0f)).xy;
 
         var sq_dist = math.lengthsq(field_dir);
@@ -75,8 +75,6 @@ public static class QuadExtension {
             field_dir = default;
             return false;
         }
-
-        Debug.Log($"pos={pos_local} closest={closest_pos} dir={field_dir}");
 
         distance = math.sqrt(sq_dist);
         field_dir /= distance;

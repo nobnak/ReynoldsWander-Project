@@ -172,6 +172,7 @@ MonoBehaviour:
     field: {fileID: 1853367962}
   tuner:
     speed: 1
+    boundary_power: 1
     wander_distance: 1
     wander_radius: 1
     wander_jitter: 0.1

@@ -62,12 +62,13 @@ public class WanderController : MonoBehaviour {
             float2 force_total = default;
 
             if (fields.IsOutsideQuad(pos_world, out var dist, out var field_dir)) {
-                Debug.Log($"Outside");
+                Debug.Log($"Outside: dir={field_dir}");
                 force_total += field_dir * tuner.boundary_power;
             } else {
                 var wander_force = GetWanderForce(ch);
                 force_total += wander_force;
             }
+            ch.totalForce = math.normalizesafe(force_total);
 
             var velocity = forward_world * tuner.speed;
             velocity += dt * force_total;
@@ -93,12 +94,11 @@ public class WanderController : MonoBehaviour {
             GL.LoadProjectionMatrix(GL.GetGPUProjectionMatrix(c.projectionMatrix, false));
 
             foreach (var ch in chars) {
-                var model = ch.tr.localToWorldMatrix;
-                using (gl.GetScope(prop))
-                using (new GLModelViewScope(model)) {
+                float3 center = ch.tr.position;
+                using (gl.GetScope(prop)) {
                     GL.Begin(GL.LINES);
-                    GL.Vertex(Vector3.zero);
-                    GL.Vertex(new float3(ch.wanderTarget, 0f));
+                    GL.Vertex(center);
+                    GL.Vertex(center + new float3(ch.totalForce, 0f));
                     GL.End();
                 }
             }
@@ -130,6 +130,7 @@ public class WanderController : MonoBehaviour {
     public class CharacterInfo {
         public Transform tr;
         public float2 wanderTarget;
+        public float2 totalForce;
     }
     [System.Serializable]
     public class Links {
