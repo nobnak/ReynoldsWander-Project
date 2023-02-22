@@ -1,6 +1,7 @@
 using LLGraphicsUnity;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Mathematics;
 using UnityEngine;
 using Random = Unity.Mathematics.Random;
@@ -14,21 +15,23 @@ public class WanderController : MonoBehaviour {
     protected GLMaterial gl;
     protected List<Quad> fields = new List<Quad>();
     protected List<CharacterInfo> chars = new List<CharacterInfo>();
+    protected List<DataForDebug> forDebugData = new List<DataForDebug>();
 
     #region unity
     protected void OnEnable() {
         rand = Random.CreateFromIndex((uint)GetInstanceID());
         gl = new GLMaterial();
 
-        fields.Add(links.field.From());
+        var fields_tr = links.fields.GetComponentsInChildren<Transform>().Where(v => v.parent == links.fields).ToArray();
+        fields.AddRange(fields_tr.Select(v => v.From()));
 
-        var n = 1;
+        var n = tuner.n;
         for (var i = 0; i < n; i++) {
             var ch = Instantiate(links.fab);
             ch.gameObject.hideFlags = HideFlags.DontSave;
 
             var posLocal = rand.NextFloat2(-0.5f, 0.5f);
-            var posWorld = links.field.TransformPoint(new float3(posLocal, 0f));
+            var posWorld = fields_tr[0].TransformPoint(new float3(posLocal, 0f));
             var rotLocal = quaternion.Euler(0, 0f, rand.NextFloat(0f, 2f * math.PI));
 
             ch.SetParent(transform, true);
@@ -56,18 +59,21 @@ public class WanderController : MonoBehaviour {
     }
     protected void Update() {
         var dt = Time.deltaTime;
-        foreach (var ch in chars) {
+        forDebugData.Clear();
+
+        for (var i = 0; i < chars.Count; i++) { 
+            var ch = chars[i];
             var pos_world = ((float3)ch.tr.position).xy;
             var forward_world = ((float3)ch.tr.right).xy;
             float2 force_total = default;
 
-            if (fields.IsOutsideQuad(pos_world, out var dist, out var field_dir)) {
-                force_total += field_dir * tuner.boundary_power;
+            var closest_dist = fields.SignedDistance(pos_world, out var closest_pos);
+            if (closest_dist > 1e-2f) {
+                force_total += math.normalize(closest_pos - pos_world) * tuner.boundary_power;
             } else {
                 var wander_force = GetWanderForce(ch);
                 force_total += wander_force;
             }
-            ch.totalForce = math.normalizesafe(force_total);
 
             var velocity = forward_world * tuner.speed;
             velocity += dt * force_total;
@@ -77,6 +83,12 @@ public class WanderController : MonoBehaviour {
             ch.tr.localRotation = rot;
             pos_world += velocity * dt;
             ch.tr.position = new float3(pos_world, 0f);
+
+            forDebugData.Add(new DataForDebug() {
+                index = i,
+                totalForce = force_total,
+                boundary_pos = closest_pos,
+            });
         }
     }
     private void OnRenderObject() {
@@ -92,22 +104,34 @@ public class WanderController : MonoBehaviour {
             GL.modelview = c.worldToCameraMatrix;
             GL.LoadProjectionMatrix(GL.GetGPUProjectionMatrix(c.projectionMatrix, false));
 
-            foreach (var ch in chars) {
+            for (var i = 0; i < chars.Count; i++) {
+                var ch = chars[i];
                 float3 center = ch.tr.position;
                 using (new GLModelViewScope(ch.tr.localToWorldMatrix))
                 using (gl.GetScope(new GLProperty(prop) { Color = Color.magenta })) {
                     var wander_center = TR_X * tuner.wander_distance;
                     GL.Begin(GL.LINE_STRIP);
-                    GL.Vertex(Vector3.zero);
+                    //GL.Vertex(Vector3.zero);
                     GL.Vertex(wander_center);
                     GL.Vertex(wander_center + new float3(ch.wanderTarget, 0f));
                     GL.End();
                 }
-                using (gl.GetScope(new GLProperty(prop) { Color = Color.red })) {
-                    GL.Begin(GL.LINES);
-                    GL.Vertex(center);
-                    GL.Vertex(center + new float3(ch.totalForce, 0f));
-                    GL.End();
+
+                var ifor = forDebugData.FindIndex(v => v.index == i);
+                if (ifor >= 0) {
+                    var ch_debug = forDebugData[ifor];
+                    using (gl.GetScope(new GLProperty(prop) { Color = Color.red })) {
+                        GL.Begin(GL.LINES);
+                        GL.Vertex(center);
+                        GL.Vertex(center + new float3(ch_debug.totalForce, 0f));
+                        GL.End();
+                    }
+                    using (gl.GetScope(new GLProperty(prop) { Color = Color.green })) {
+                        GL.Begin(GL.LINES);
+                        GL.Vertex(center);
+                        GL.Vertex(new float3(ch_debug.boundary_pos, 0f));
+                        GL.End();
+                    }
                 }
             }
         }
@@ -135,19 +159,25 @@ public class WanderController : MonoBehaviour {
     public static readonly float3 TR_Z = new float3(0f, 0f, 1f);
     public static readonly float3 TR_X = new float3(1f, 0f, 0f);
     [System.Serializable]
+    public class DataForDebug {
+        public int index;
+        public float2 totalForce;
+        public float2 boundary_pos;
+    }
+    [System.Serializable]
     public class CharacterInfo {
         public Transform tr;
         public float2 wanderTarget;
-        public float2 totalForce;
     }
     [System.Serializable]
     public class Links {
         public Transform fab;
-        public Transform field;
+        public Transform fields;
     }
 
     [System.Serializable]
     public class Tuner {
+        public int n = 1;
         public float speed;
 
         public float boundary_power;
