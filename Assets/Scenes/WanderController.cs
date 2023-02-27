@@ -65,15 +65,17 @@ public class WanderController : MonoBehaviour {
             var ch = chars[i];
             var pos_world = ((float3)ch.tr.position).xy;
             var forward_world = ((float3)ch.tr.right).xy;
+            var search_world = pos_world + tuner.search_distance * forward_world;
             float2 force_total = default;
 
-            var closest_dist = fields.SignedDistance(pos_world, out var closest_pos);
+            var closest_dist = fields.SignedDistance(search_world, out var closest_pos);
             if (closest_dist > 1e-2f) {
-                force_total += math.normalize(closest_pos - pos_world) * tuner.boundary_power;
-            } else {
-                var wander_force = GetWanderForce(ch);
-                force_total += wander_force;
+                force_total += math.normalize(closest_pos - search_world)
+                    * math.smoothstep(0f, tuner.boundary_width, closest_dist) * tuner.boundary_power;
             }
+
+            var wander_force = GetWanderForce(ch);
+            force_total += wander_force;
 
             var velocity = forward_world * tuner.speed;
             velocity += dt * force_total;
@@ -88,6 +90,8 @@ public class WanderController : MonoBehaviour {
                 index = i,
                 totalForce = force_total,
                 boundary_pos = closest_pos,
+                center_pos = pos_world,
+                search_pos = search_world,
             });
         }
     }
@@ -106,7 +110,7 @@ public class WanderController : MonoBehaviour {
 
             for (var i = 0; i < chars.Count; i++) {
                 var ch = chars[i];
-                float3 center = ch.tr.position;
+
                 using (new GLModelViewScope(ch.tr.localToWorldMatrix))
                 using (gl.GetScope(new GLProperty(prop) { Color = Color.magenta })) {
                     var wander_center = TR_X * tuner.wander_distance;
@@ -120,6 +124,10 @@ public class WanderController : MonoBehaviour {
                 var ifor = forDebugData.FindIndex(v => v.index == i);
                 if (ifor >= 0) {
                     var ch_debug = forDebugData[ifor];
+                    var center = new float3(ch_debug.center_pos, 0f);
+                    var search = new float3(ch_debug.search_pos, 0f);
+                    var boundary = new float3(ch_debug.boundary_pos, 0f);
+
                     using (gl.GetScope(new GLProperty(prop) { Color = Color.red })) {
                         GL.Begin(GL.LINES);
                         GL.Vertex(center);
@@ -128,8 +136,8 @@ public class WanderController : MonoBehaviour {
                     }
                     using (gl.GetScope(new GLProperty(prop) { Color = Color.green })) {
                         GL.Begin(GL.LINES);
-                        GL.Vertex(center);
-                        GL.Vertex(new float3(ch_debug.boundary_pos, 0f));
+                        GL.Vertex(search);
+                        GL.Vertex(boundary);
                         GL.End();
                     }
                 }
@@ -163,6 +171,8 @@ public class WanderController : MonoBehaviour {
         public int index;
         public float2 totalForce;
         public float2 boundary_pos;
+        public float2 center_pos;
+        public float2 search_pos;
     }
     [System.Serializable]
     public class CharacterInfo {
@@ -180,7 +190,10 @@ public class WanderController : MonoBehaviour {
         public int n = 1;
         public float speed;
 
+        public float search_distance;
+
         public float boundary_power;
+        public float boundary_width;
 
         public float wander_distance;
         public float wander_radius;
