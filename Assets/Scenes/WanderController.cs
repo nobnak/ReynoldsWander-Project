@@ -65,16 +65,21 @@ public class WanderController : MonoBehaviour {
             var ch = chars[i];
             var pos_world = ((float3)ch.tr.position).xy;
             var forward_world = ((float3)ch.tr.right).xy;
-            var search_world = pos_world + tuner.search_distance * forward_world;
+            var right_world = -((float3)ch.tr.up).xy;
+            var search_world_r = pos_world + tuner.search_distance 
+                * math.lerp(forward_world, right_world, tuner.search_angle);
+            var search_world_l = pos_world + tuner.search_distance 
+                * math.lerp(forward_world, -right_world, tuner.search_angle);
             float2 force_total = default;
+            var forDebug = new DataForDebug() { 
+                index = i, 
+                center_pos = pos_world 
+            };
 
-            var closest_dist = fields.SignedDistance(search_world, out var closest_pos);
-            if (closest_dist > 1e-2f) {
-                force_total += math.normalize(closest_pos - search_world)
-                    * math.smoothstep(0f, tuner.boundary_width, closest_dist) * tuner.boundary_power;
-            }
+            var boundary_force = GetBoundaryForce(ch, forDebug);
+            force_total += boundary_force;
 
-            var wander_force = GetWanderForce(ch);
+            var wander_force = GetWanderForce(ch, forDebug);
             force_total += wander_force;
 
             var velocity = forward_world * tuner.speed;
@@ -86,13 +91,8 @@ public class WanderController : MonoBehaviour {
             pos_world += velocity * dt;
             ch.tr.position = new float3(pos_world, 0f);
 
-            forDebugData.Add(new DataForDebug() {
-                index = i,
-                totalForce = force_total,
-                boundary_pos = closest_pos,
-                center_pos = pos_world,
-                search_pos = search_world,
-            });
+            forDebug.totalForce = force_total;
+            forDebugData.Add(forDebug);
         }
     }
     private void OnRenderObject() {
@@ -112,7 +112,7 @@ public class WanderController : MonoBehaviour {
                 var ch = chars[i];
 
                 using (new GLModelViewScope(ch.tr.localToWorldMatrix))
-                using (gl.GetScope(new GLProperty(prop) { Color = Color.magenta })) {
+                using (gl.GetScope(new GLProperty(prop) { Color = Color.blue })) {
                     var wander_center = TR_X * tuner.wander_distance;
                     GL.Begin(GL.LINE_STRIP);
                     //GL.Vertex(Vector3.zero);
@@ -125,10 +125,12 @@ public class WanderController : MonoBehaviour {
                 if (ifor >= 0) {
                     var ch_debug = forDebugData[ifor];
                     var center = new float3(ch_debug.center_pos, 0f);
-                    var search = new float3(ch_debug.search_pos, 0f);
-                    var boundary = new float3(ch_debug.boundary_pos, 0f);
+                    var search_r = new float3(ch_debug.search_pos_r, 0f);
+                    var search_l = new float3(ch_debug.search_pos_l, 0f);
+                    var boundary_r = new float3(ch_debug.boundary_pos_r, 0f);
+                    var boundary_l = new float3(ch_debug.boundary_pos_l, 0f);
 
-                    using (gl.GetScope(new GLProperty(prop) { Color = Color.red })) {
+                    using (gl.GetScope(new GLProperty(prop) { Color = Color.gray })) {
                         GL.Begin(GL.LINES);
                         GL.Vertex(center);
                         GL.Vertex(center + new float3(ch_debug.totalForce, 0f));
@@ -136,8 +138,10 @@ public class WanderController : MonoBehaviour {
                     }
                     using (gl.GetScope(new GLProperty(prop) { Color = Color.green })) {
                         GL.Begin(GL.LINES);
-                        GL.Vertex(search);
-                        GL.Vertex(boundary);
+                        GL.Vertex(search_r);
+                        GL.Vertex(boundary_r);
+                        GL.Vertex(search_l);
+                        GL.Vertex(boundary_l);
                         GL.End();
                     }
                 }
@@ -147,7 +151,7 @@ public class WanderController : MonoBehaviour {
     #endregion
 
     #region methods
-    public float2 GetWanderForce(CharacterInfo ch) {
+    public float2 GetWanderForce(CharacterInfo ch, DataForDebug ford) {
         var wt = ch.wanderTarget;
         wt += rand.NextFloat2(-tuner.wander_jitter, tuner.wander_jitter);
         wt = math.normalizesafe(wt);
@@ -161,6 +165,34 @@ public class WanderController : MonoBehaviour {
         float3 wander_force = target_world - pos_world;
         return wander_force.xy;
     }
+    public float2 GetBoundaryForce(CharacterInfo ch, DataForDebug ford) {
+        var pos_world = ((float3)ch.tr.position).xy;
+        var forward_world = ((float3)ch.tr.right).xy;
+        var right_world = -((float3)ch.tr.up).xy;
+        var search_world_r = pos_world + tuner.search_distance
+            * math.lerp(forward_world, right_world, tuner.search_angle);
+        var search_world_l = pos_world + tuner.search_distance
+            * math.lerp(forward_world, -right_world, tuner.search_angle);
+
+        var closest_dist_r = fields.SignedDistance(search_world_r, out var closest_pos_r);
+        var closest_dist_l = fields.SignedDistance(search_world_l, out var closest_pos_l);
+        float2 boundary_force = default;
+        if (closest_dist_r > 1e-2f) {
+            boundary_force += math.normalize(closest_pos_r - search_world_r)
+                * math.smoothstep(0f, tuner.boundary_width, closest_dist_r) * tuner.boundary_power;
+        }
+        if (closest_dist_l > 1e-2f) {
+            boundary_force += math.normalize(closest_pos_l - search_world_l)
+                * math.smoothstep(0f, tuner.boundary_width, closest_dist_l) * tuner.boundary_power;
+        }
+
+        ford.search_pos_r = search_world_r;
+        ford.search_pos_l = search_world_l;
+        ford.boundary_pos_r = closest_pos_r;
+        ford.boundary_pos_l = closest_pos_l;
+
+        return boundary_force;
+    }
     #endregion
 
     #region declarations
@@ -170,9 +202,12 @@ public class WanderController : MonoBehaviour {
     public class DataForDebug {
         public int index;
         public float2 totalForce;
-        public float2 boundary_pos;
         public float2 center_pos;
-        public float2 search_pos;
+
+        public float2 search_pos_r;
+        public float2 search_pos_l;
+        public float2 boundary_pos_r;
+        public float2 boundary_pos_l;
     }
     [System.Serializable]
     public class CharacterInfo {
@@ -191,6 +226,8 @@ public class WanderController : MonoBehaviour {
         public float speed;
 
         public float search_distance;
+        [Range(0f, 1f)]
+        public float search_angle;
 
         public float boundary_power;
         public float boundary_width;

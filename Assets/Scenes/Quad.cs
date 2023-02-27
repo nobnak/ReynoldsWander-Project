@@ -99,7 +99,6 @@ public static class QuadExtension {
             closest_world2 = q_center + closest_on_y;
 
         var dist_sign = (dx < 0 && dy < 0) ? -1 : 1;
-        Debug.Log($"sign={dist_sign}, xy=({x},{y}) uv=({q_u},{q_v})");
 
         var field_dir = closest_world2 - point_world2;
         var distance = math.length(field_dir);
