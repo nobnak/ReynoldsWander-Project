@@ -10,12 +10,11 @@ public struct Quad {
 
     bool model_valid;
     float4x4 model;
+    float4 uv;
+    float bounding_sphere;
 
     bool model_inv_valid;
     float4x4 model_inverse;
-
-    bool uv_valid;
-    float4 uv;
 
     public float4x4 Model {
         get {
@@ -44,10 +43,15 @@ public struct Quad {
             return uv.zw;
         }
     }
+    public float BoundingSphere {
+        get {
+            ValidateModel();
+            return bounding_sphere;
+        }
+    }
     public void Invalidate() {
         model_valid = false;
         model_inv_valid = false;
-        uv_valid = false;
     }
 
     void ValidateModel() {
@@ -61,12 +65,14 @@ public struct Quad {
             uv = new float4(
                 math.mul(model_r, new float3(1f, 0f, 0f)).xy, 
                 math.mul(model_r, new float3(0f, 1f, 0f)).xy);
+            bounding_sphere = math.length(size * 0.5f);
         }
     }
 
 }
 
 public static class QuadExtension {
+
 
     public static Quad From(this Transform quad) {
         return new Quad() {
@@ -111,6 +117,9 @@ public static class QuadExtension {
         var iter = quads.GetEnumerator();
         for (var i = 0; iter.MoveNext(); i++) {
             var q = iter.Current;
+            var dist_high_lim = distance + q.BoundingSphere;
+            if (math.distancesq(q.center, pos_world2) > (dist_high_lim * dist_high_lim)) continue;
+
             var tmp_distance = q.SignedDistance(pos_world2, out var tmp_closest_world2);
             if (distance > 0f) {
                 if (tmp_distance < distance) {

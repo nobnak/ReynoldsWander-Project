@@ -59,9 +59,12 @@ public class WanderController : MonoBehaviour {
     }
     protected void Update() {
         var dt = Time.deltaTime;
-        forDebugData.Clear();
 
-        for (var i = 0; i < chars.Count; i++) { 
+        var nf = forDebugData.Count;
+        var nc = chars.Count;
+        if (nf > nc) forDebugData.RemoveRange(nc, math.max(0, nf - nc));
+
+        for (var i = 0; i < nc; i++) { 
             var ch = chars[i];
             var pos_world = ((float3)ch.tr.position).xy;
             var forward_world = ((float3)ch.tr.right).xy;
@@ -71,10 +74,9 @@ public class WanderController : MonoBehaviour {
             var search_world_l = pos_world + tuner.search_distance 
                 * math.lerp(forward_world, -right_world, tuner.search_angle);
             float2 force_total = default;
-            var forDebug = new DataForDebug() { 
-                index = i, 
-                center_pos = pos_world 
-            };
+            var forDebug = (i < forDebugData.Count) ? forDebugData[i] : new DataForDebug();
+            forDebug.index = i;
+            forDebug.center_pos = pos_world;
 
             var boundary_force = GetBoundaryForce(ch, forDebug);
             force_total += boundary_force;
@@ -92,7 +94,7 @@ public class WanderController : MonoBehaviour {
             ch.tr.position = new float3(pos_world, 0f);
 
             forDebug.totalForce = force_total;
-            forDebugData.Add(forDebug);
+            if (forDebugData.Count <= i) forDebugData.Add(forDebug);
         }
     }
     private void OnRenderObject() {
