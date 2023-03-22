@@ -4,3 +4,6 @@
 [submodule "Assets/Packages/Gist2"]
 	path = Assets/Packages/Gist2
 	url = https://github.com/nobnak/Gist2.git
+[submodule "Assets/Packages/ReynoldsWander"]
+	path = Assets/Packages/ReynoldsWander
+	url = https://github.com/nobnak/ReynoldsWander-pkg.git
