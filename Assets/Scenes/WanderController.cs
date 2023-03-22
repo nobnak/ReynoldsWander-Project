@@ -1,5 +1,6 @@
 using Gist2.Deferred;
 using LLGraphicsUnity;
+using ReynoldsWander;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,7 +34,7 @@ public class WanderController : MonoBehaviour {
         };
 
         var fields_tr = links.fields.GetComponentsInChildren<Transform>().Where(v => v.parent == links.fields).ToArray();
-        fields.AddRange(fields_tr.Select(v => v.From()));
+        fields.AddRange(fields_tr.Select(v => Quad.From(v)));
 
         var n = tuner.n;
         for (var i = 0; i < n; i++) {
@@ -94,7 +95,6 @@ public class WanderController : MonoBehaviour {
 
             //var wander_force = GetWanderForce(ch, forDebug);
             var wander_force = wander.GetWanderForce(ch.wanderData, ch.coord);
-            Debug.Log($"wander={wander_force}");
             force_total += wander_force;
 
             var velocity = forward_world * tuner.speed;
